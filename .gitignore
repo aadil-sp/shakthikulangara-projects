@@ -1,0 +1,27 @@
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# PlatformIO & Arduino Build Artifacts
+.pio/
+.vscode/
+.idea/
+*.bin
+*.elf
+*.hex
+*.tar.gz
+__pycache__/
+*.pyc
+
+# Virtual environments
+venv/
+.env/
+
+# Local logs
+*.log
+serial_log.txt

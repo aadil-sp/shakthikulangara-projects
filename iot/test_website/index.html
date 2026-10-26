@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Shakthikulangara Fishing Boat: Fish Quality & Ice Storage Simulator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500;700;800&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .font-tech {
+      font-family: 'Share Tech Mono', monospace;
+    }
+    /* Realistic 7-Segment Glow Effect */
+    .segment {
+      transition: fill 0.08s ease, filter 0.08s ease;
+    }
+    .seg-on {
+      fill: #ff2233;
+      filter: drop-shadow(0 0 5px rgba(255, 34, 51, 0.95)) drop-shadow(0 0 10px rgba(255, 34, 51, 0.6));
+    }
+    .seg-off {
+      fill: #220508;
+      filter: none;
+    }
+    /* OLED Display Glow */
+    .oled-screen {
+      background-color: #03060a;
+      border: 3px solid #1a2638;
+      box-shadow: inset 0 0 16px rgba(0, 0, 0, 0.9), 0 0 18px rgba(56, 189, 248, 0.15);
+    }
+    /* Tactile Push Buttons */
+    .tactile-btn {
+      transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 4px 0 #0f172a, 0 6px 12px rgba(0, 0, 0, 0.5);
+    }
+    .tactile-btn:active, .tactile-btn.pressed {
+      transform: translateY(3px);
+      box-shadow: 0 1px 0 #0f172a, 0 2px 4px rgba(0, 0, 0, 0.5);
+    }
+    /* Custom Scrollbar for Terminal */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #090d16;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1e293b;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #334155;
+    }
+  </style>
+</head>
+<body class="bg-[#05070a] text-slate-100 min-h-screen flex flex-col justify-between selection:bg-cyan-500 selection:text-white">
+
+  <!-- Top Header / Marine Telemetry HUD -->
+  <header class="border-b border-slate-800 bg-[#080d1a]/95 backdrop-blur sticky top-0 z-50 px-4 py-2.5">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400 font-black text-xl shadow-lg shadow-cyan-500/10">
+          🐟
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-sm font-bold tracking-tight text-white uppercase">SHAKTHIKULANGARA FISHING FLEET &bull; BOAT CATCH MONITOR</h1>
+            <span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 uppercase tracking-wider">
+              NodeMCU ESP8266
+            </span>
+          </div>
+          <p class="text-xs text-slate-400">Cold Chain (0-4°C) &bull; Spoilage Gases (TMA/NH3 & CH4) &bull; Meltwater Clogging Prevention</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button id="btn-audio-toggle" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold border border-slate-700 flex items-center gap-1.5 transition">
+          <span id="audio-icon">🔊</span> <span id="audio-label">Alarm Audio ON</span>
+        </button>
+        <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+          <span>HARBOUR TELEMETRY: 115200 BAUD</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Multi-Column Interactive Workspace -->
+  <main class="max-w-7xl mx-auto w-full p-3 sm:p-4 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+    <!-- LEFT COLUMN (7 Cols): Virtual Hardware Unit & Hold Cross-Section -->
+    <div class="lg:col-span-7 flex flex-col gap-4">
+
+      <!-- HARDWARE DEVICE CASING (NodeMCU Enclosure) -->
+      <div class="bg-[#0b1222] border-2 border-slate-800 rounded-3xl p-4 sm:p-5 shadow-2xl relative overflow-hidden">
+        <!-- Top Status Bar on Casing -->
+        <div class="flex items-center justify-between mb-4 border-b border-slate-800/80 pb-3">
+          <div class="flex items-center gap-2.5">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 shadow-sm shadow-cyan-400"></span>
+              Marine Control Unit
+            </span>
+            <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950/70 text-cyan-300 border border-cyan-800/50">
+              IP65 SEALED HOUSING
+            </span>
+          </div>
+
+          <!-- Onboard NodeMCU Status LEDs -->
+          <div class="flex items-center gap-3 text-xs font-mono text-slate-400">
+            <span class="flex items-center gap-1">
+              <span id="led-heartbeat" class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+              <span class="text-[10px]">D4 PULSE</span>
+            </span>
+            <span class="flex items-center gap-1">
+              <span id="led-alarm" class="w-2 h-2 rounded-full bg-red-950 border border-red-800"></span>
+              <span class="text-[10px]" id="alarm-text">ALARM OK</span>
+            </span>
+          </div>
+        </div>
+
+        <!-- DUAL DISPLAY PANEL -->
+        <div class="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center">
+
+          <!-- 1. SSD1306 0.96" OLED GRAPHICAL DISPLAY (128x64 simulated) -->
+          <div class="sm:col-span-7 flex flex-col items-center">
+            <div class="w-full flex items-center justify-between mb-1.5 px-1">
+              <span class="text-[11px] font-bold text-slate-400 flex items-center gap-1">
+                <span>🖥️</span> 0.96" OLED (SSD1306 I2C)
+              </span>
+              <span id="oled-page-badge" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                PAGE 1/4
+              </span>
+            </div>
+
+            <!-- OLED Canvas Container -->
+            <div class="w-full aspect-[2/1] rounded-xl oled-screen p-2.5 flex items-center justify-center relative overflow-hidden">
+              <canvas id="oledCanvas" width="256" height="128" class="w-full h-full block image-rendering-pixelated"></canvas>
+            </div>
+            <span class="text-[10px] text-slate-500 mt-1">D1 (SCL) &bull; D2 (SDA) &bull; 0x3C</span>
+          </div>
+
+          <!-- 2. TM1637 4-DIGIT 7-SEGMENT DISPLAY -->
+          <div class="sm:col-span-5 flex flex-col items-center">
+            <div class="w-full flex items-center justify-between mb-1.5 px-1">
+              <span class="text-[11px] font-bold text-slate-400 flex items-center gap-1">
+                <span>⏱️</span> TM1637 7-SEGMENT
+              </span>
+              <span id="tm-mode-badge" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-red-950/80 text-red-300 border border-red-800/60">
+                MODE: AUTO
+              </span>
+            </div>
+
+            <!-- 7-Segment SVG Container -->
+            <div class="w-full bg-[#120406] border-2 border-red-950/80 rounded-xl p-3 flex items-center justify-center shadow-inner relative">
+              <svg id="tm1637Svg" viewBox="0 0 200 65" class="w-full h-auto max-h-[70px]">
+                <!-- Digits and Colons populated via JS -->
+              </svg>
+            </div>
+            <span class="text-[10px] text-slate-500 mt-1">D5 (CLK) &bull; D6 (DIO) &bull; 0.36" RED</span>
+          </div>
+
+        </div>
+
+        <!-- 3 HARDWARE PUSH BUTTONS ON CASING -->
+        <div class="mt-5 pt-4 border-t border-slate-800/80">
+          <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2.5 flex items-center justify-between">
+            <span>Marine Tactile Navigation Controls</span>
+            <span class="text-[10px] text-cyan-400 font-mono">GPIO0 / GPIO16 / GPIO3</span>
+          </div>
+
+          <div class="grid grid-cols-3 gap-3">
+            <!-- Button 1: Next Page -->
+            <button id="btn-hw-next" class="tactile-btn py-3 px-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700 font-bold flex flex-col items-center justify-center gap-1">
+              <span class="text-base">▶</span>
+              <span class="text-xs uppercase tracking-tight">NEXT PAGE</span>
+              <span class="text-[9px] font-mono text-cyan-400">PIN D3 (GPIO 0)</span>
+            </button>
+
+            <!-- Button 2: Prev Page -->
+            <button id="btn-hw-prev" class="tactile-btn py-3 px-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700 font-bold flex flex-col items-center justify-center gap-1">
+              <span class="text-base">◀</span>
+              <span class="text-xs uppercase tracking-tight">PREV PAGE</span>
+              <span class="text-[9px] font-mono text-cyan-400">PIN D0 (GPIO 16)</span>
+            </button>
+
+            <!-- Button 3: Select / Mode / Mute -->
+            <button id="btn-hw-select" class="tactile-btn py-3 px-2 rounded-xl bg-cyan-700 hover:bg-cyan-600 text-white border border-cyan-500/50 font-bold flex flex-col items-center justify-center gap-1">
+              <span class="text-base">🔘</span>
+              <span class="text-xs uppercase tracking-tight">MODE / MUTE</span>
+              <span class="text-[9px] font-mono text-cyan-200">PIN RX (GPIO 3)</span>
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- FISH STORAGE HOLD & MELTWATER CROSS-SECTION VISUALIZATION -->
+      <div class="bg-[#0b1222] border border-slate-800 rounded-3xl p-4 sm:p-5 flex flex-col shadow-xl">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+              <span>🧊</span> Hold Cross-Section: "Only Ice Should Remain"
+            </span>
+          </div>
+          <span id="clog-alert-pill" class="text-[11px] font-bold font-mono px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+            DRAINAGE OK (0.0 cm)
+          </span>
+        </div>
+
+        <!-- Cross-section Canvas -->
+        <div class="relative w-full aspect-[16/9] bg-[#070b14] rounded-2xl overflow-hidden border border-slate-800">
+          <canvas id="holdCanvas" width="640" height="360" class="w-full h-full block"></canvas>
+        </div>
+
+        <div class="mt-2.5 flex items-center justify-between text-[11px] text-slate-400">
+          <span class="flex items-center gap-1.5">
+            <span class="w-2.5 h-2.5 bg-blue-400 rounded-sm"></span> Crushed Block Ice Layer
+          </span>
+          <span class="flex items-center gap-1.5">
+            <span class="w-2.5 h-2.5 bg-cyan-300 rounded-sm"></span> Marine Catch (Tuna/Kingfish)
+          </span>
+          <span class="flex items-center gap-1.5">
+            <span class="w-2.5 h-2.5 bg-amber-500 rounded-sm"></span> Meltwater Accumulation Well
+          </span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT COLUMN (5 Cols): Marine Environment Controls & Telemetry -->
+    <div class="lg:col-span-5 flex flex-col gap-4">
+
+      <!-- SCENARIO PRESETS -->
+      <div class="bg-[#0b1222] border border-slate-800 rounded-3xl p-4 shadow-xl">
+        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+          <span>⚡</span> Quick Marine Scenario Presets
+        </h3>
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <button id="preset-fresh" class="p-2.5 rounded-xl bg-emerald-950/60 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-800/60 font-bold flex flex-col text-left transition">
+            <span class="text-sm">🌟 Prime Fresh Catch</span>
+            <span class="text-[10px] text-emerald-400/80 font-normal">2.0°C &bull; 0.5cm Water &bull; Clean Gas</span>
+          </button>
+
+          <button id="preset-warm" class="p-2.5 rounded-xl bg-amber-950/60 hover:bg-amber-900/60 text-amber-300 border border-amber-800/60 font-bold flex flex-col text-left transition">
+            <span class="text-sm">⚠️ Ice Melting / Warm</span>
+            <span class="text-[10px] text-amber-400/80 font-normal">6.5°C &bull; 3.0cm Water &bull; Slight TMA</span>
+          </button>
+
+          <button id="preset-clog" class="p-2.5 rounded-xl bg-orange-950/60 hover:bg-orange-900/60 text-orange-300 border border-orange-800/60 font-bold flex flex-col text-left transition">
+            <span class="text-sm">🚨 Clogged Drain Alert!</span>
+            <span class="text-[10px] text-orange-400/80 font-normal">3.0°C &bull; 8.5cm Waterlogged!</span>
+          </button>
+
+          <button id="preset-spoil" class="p-2.5 rounded-xl bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 border border-rose-800/60 font-bold flex flex-col text-left transition">
+            <span class="text-sm">☣️ Advanced Decay</span>
+            <span class="text-[10px] text-rose-400/80 font-normal">14.0°C &bull; Methane &bull; High Putrescine</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- INTERACTIVE SENSOR SLIDERS -->
+      <div class="bg-[#0b1222] border border-slate-800 rounded-3xl p-4 sm:p-5 flex flex-col gap-4 shadow-xl">
+        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+          <span>🎛️ Live Sensor Injection Knobs</span>
+          <span class="text-[10px] text-slate-500 font-normal">Simulate Sea Conditions</span>
+        </h3>
+
+        <!-- 1. TEMPERATURE SLIDER (DHT11) -->
+        <div class="flex flex-col gap-1.5">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-bold flex items-center gap-1.5 text-slate-300">
+              <span>🌡️</span> Hold Temperature (DHT11)
+            </span>
+            <span id="val-temp" class="font-mono font-bold text-cyan-400 bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-800/50">
+              2.5 °C
+            </span>
+          </div>
+          <input id="slider-temp" type="range" min="0" max="18" step="0.1" value="2.5" class="w-full accent-cyan-400 bg-slate-800 rounded-lg cursor-pointer h-2">
+          <div class="flex justify-between text-[10px] text-slate-500">
+            <span class="text-emerald-400">0°C Optimal</span>
+            <span class="text-amber-400">4°C Max Chilled</span>
+            <span class="text-rose-400">18°C Danger</span>
+          </div>
+        </div>
+
+        <!-- 2. MELTWATER LEVEL SLIDER (Ultrasonic) -->
+        <div class="flex flex-col gap-1.5">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-bold flex items-center gap-1.5 text-slate-300">
+              <span>🌊</span> Meltwater Depth (Ultrasonic)
+            </span>
+            <span id="val-water" class="font-mono font-bold text-blue-400 bg-blue-950/60 px-2 py-0.5 rounded border border-blue-800/50">
+              1.2 cm
+            </span>
+          </div>
+          <input id="slider-water" type="range" min="0" max="15" step="0.1" value="1.2" class="w-full accent-blue-400 bg-slate-800 rounded-lg cursor-pointer h-2">
+          <div class="flex justify-between text-[10px] text-slate-500">
+            <span class="text-emerald-400">&le; 2cm (Ice Only)</span>
+            <span class="text-amber-400">2-5cm (Pool)</span>
+            <span class="text-rose-400">&gt; 5cm (CLOGGED!)</span>
+          </div>
+        </div>
+
+        <!-- 3. MQ-135 SPOILAGE GAS SLIDER (Ammonia & TMA) -->
+        <div class="flex flex-col gap-1.5">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-bold flex items-center gap-1.5 text-slate-300">
+              <span>💨</span> Spoilage Gas Volatiles (MQ-135 A0)
+            </span>
+            <span id="val-gas" class="font-mono font-bold text-amber-400 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-800/50">
+              220 ADC (12 ppm)
+            </span>
+          </div>
+          <input id="slider-gas" type="range" min="150" max="800" step="5" value="220" class="w-full accent-amber-400 bg-slate-800 rounded-lg cursor-pointer h-2">
+          <div class="flex justify-between text-[10px] text-slate-500">
+            <span class="text-emerald-400">180 (Clean Sea Breeze)</span>
+            <span class="text-amber-400">350 (Early TVB-N)</span>
+            <span class="text-rose-400">580+ (Putrefaction)</span>
+          </div>
+        </div>
+
+        <!-- 4. MQ-4 METHANE TOGGLE -->
+        <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-900 border border-slate-800">
+          <div>
+            <div class="text-xs font-bold text-slate-200">MQ-4 Methane Sensor (CH4)</div>
+            <div class="text-[10px] text-slate-400">Anaerobic bacterial fermentation in deep hold</div>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input id="toggle-mq4" type="checkbox" class="sr-only peer">
+            <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
+          </label>
+        </div>
+
+      </div>
+
+      <!-- LIVE SERIAL TELEMETRY MONITOR (115200 BAUD) -->
+      <div class="bg-[#080d1a] border border-slate-800 rounded-3xl p-4 flex flex-col flex-1 shadow-xl">
+        <div class="flex items-center justify-between mb-2 pb-2 border-b border-slate-800">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+            <span class="text-xs font-bold font-mono text-slate-300">Serial Telemetry (115200 Baud)</span>
+          </div>
+          <button id="btn-clear-term" class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">Clear</button>
+        </div>
+
+        <!-- Terminal Output Window -->
+        <div id="terminal" class="w-full h-36 font-mono text-[11px] leading-relaxed text-slate-300 overflow-y-auto space-y-1 p-2 bg-[#04060b] rounded-xl border border-slate-900/80">
+          <!-- Populated via JS -->
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Bottom Footer -->
+  <footer class="border-t border-slate-800/80 bg-[#060a14] py-2 px-4 text-center text-xs text-slate-500">
+    <span>Shakthikulangara School STEM Lab &bull; Developed with NodeMCU ESP8266 &bull; Marine Products Export Development Authority (MPEDA) Standard Compliant</span>
+  </footer>
+
+  <!-- SCRIPT ENGINE: NODE MCU FIRMWARE EMULATION & CANVAS GRAPHICS -->
+  <script>
+    // =========================================================================
+    // 1. STATE & CONSTANTS
+    // =========================================================================
+    const TANK_DEPTH_TOTAL_CM = 40.0;
+    let tempC = 2.5;
+    let waterCm = 1.2;
+    let gasAdc = 220;
+    let mq4Alarm = false;
+    let audioEnabled = true;
+
+    // UI States
+    let oledPage = 0;       // 0: Dashboard, 1: Gas, 2: Cold/Drain, 3: System
+    let tmMode = 3;         // 0: Temp, 1: Water, 2: Score, 3: Auto
+    let tmAutoSubMode = 0;
+    let alarmMuted = false;
+    let voyageSeconds = 142;
+
+    // Freshness & Grades
+    let freshnessScore = 95;
+    let fishGrade = 'PRIME FRESH';
+    let drainState = 'CLEAR';
+    let tempState = 'OPTIMAL';
+    let gasState = 'OK';
+
+    // Hardware Buttons State
+    let selectPressStartTime = 0;
+
+    // Audio Context (Synthesizer for buzzer alarm)
+    let audioCtx = null;
+    let buzzerOsc = null;
+
+    // DOM Elements
+    const oledCanvas = document.getElementById('oledCanvas');
+    const oledCtx = oledCanvas.getContext('2d');
+    const holdCanvas = document.getElementById('holdCanvas');
+    const holdCtx = holdCanvas.getContext('2d');
+    const terminal = document.getElementById('terminal');
+
+    const sliderTemp = document.getElementById('slider-temp');
+    const sliderWater = document.getElementById('slider-water');
+    const sliderGas = document.getElementById('slider-gas');
+    const toggleMq4 = document.getElementById('toggle-mq4');
+
+    const valTemp = document.getElementById('val-temp');
+    const valWater = document.getElementById('val-water');
+    const valGas = document.getElementById('val-gas');
+    const oledPageBadge = document.getElementById('oled-page-badge');
+    const tmModeBadge = document.getElementById('tm-mode-badge');
+    const clogAlertPill = document.getElementById('clog-alert-pill');
+    const ledHeartbeat = document.getElementById('led-heartbeat');
+    const ledAlarm = document.getElementById('led-alarm');
+    const alarmText = document.getElementById('alarm-text');
+
+    // =========================================================================
+    // 2. AUDIO SYNTHESIS FOR MARINE BUZZER
+    // =========================================================================
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+    }
+
+    function playBeep(freq = 2400, duration = 0.12) {
+      if (!audioEnabled || alarmMuted) return;
+      try {
+        initAudio();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) {}
+    }
+
+    // =========================================================================
+    // 3. MULTI-METRIC FISH FRESHNESS EVALUATION (Exact C++ Algorithm)
+    // =========================================================================
+    function evaluateFishQuality() {
+      // 1. Cold chain evaluation
+      if (tempC <= 4.0) {
+        tempState = 'OPTIMAL';
+      } else if (tempC <= 8.0) {
+        tempState = 'WARM';
+      } else {
+        tempState = 'CRITICAL';
+      }
+
+      // 2. Drainage & Meltwater Clogging evaluation
+      if (waterCm <= 2.0) {
+        drainState = 'CLEAR';
+      } else if (waterCm <= 5.0) {
+        drainState = 'RISING';
+      } else {
+        drainState = 'CLOGGED'; // Stagnant water leaches and contaminates fish!
+      }
+
+      // 3. Spoilage Gas evaluation
+      if (gasAdc < 350 && !mq4Alarm) {
+        gasState = 'OK';
+      } else if (gasAdc < 580) {
+        gasState = 'DETECTED';
+      } else {
+        gasState = 'ROTTING';
+      }
+
+      // 4. Freshness Score calculation (0 - 100%)
+      let score = 100;
+      if (tempC > 4.0) {
+        score -= Math.round((tempC - 4.0) * 8.0);
+      }
+      if (waterCm > 2.0) {
+        score -= Math.round((waterCm - 2.0) * 12.0); // Heavy penalty: stagnant water contamination
+      }
+      if (gasAdc > 180) {
+        score -= Math.round((gasAdc - 180) / 15);
+      }
+      if (mq4Alarm) {
+        score -= 25;
+      }
+      freshnessScore = Math.max(0, Math.min(100, score));
+
+      // 5. Final Grade Assignment
+      if (drainState === 'CLOGGED' || gasState === 'ROTTING' || freshnessScore < 40) {
+        fishGrade = 'SPOILED';
+      } else if (tempState === 'CRITICAL' || drainState === 'RISING' || gasState === 'DETECTED' || freshnessScore < 70) {
+        fishGrade = 'WARNING';
+      } else if (freshnessScore < 85) {
+        fishGrade = 'COMMERCIAL';
+      } else {
+        fishGrade = 'PRIME FRESH';
+      }
+
+      // Update Pill status
+      if (drainState === 'CLOGGED') {
+        clogAlertPill.className = 'text-[11px] font-bold font-mono px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse';
+        clogAlertPill.textContent = `! WATER CLOGGED (${waterCm.toFixed(1)} cm)`;
+        ledAlarm.className = 'w-2 h-2 rounded-full bg-rose-500 animate-ping';
+        alarmText.textContent = 'DRAIN CLOGGED!';
+        alarmText.className = 'text-[10px] text-rose-400 font-bold';
+      } else if (fishGrade === 'SPOILED') {
+        clogAlertPill.className = 'text-[11px] font-bold font-mono px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/40';
+        clogAlertPill.textContent = 'CATCH SPOILED!';
+        ledAlarm.className = 'w-2 h-2 rounded-full bg-rose-500 animate-pulse';
+        alarmText.textContent = 'FISH SPOILED!';
+        alarmText.className = 'text-[10px] text-rose-400 font-bold';
+      } else if (drainState === 'RISING') {
+        clogAlertPill.className = 'text-[11px] font-bold font-mono px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30';
+        clogAlertPill.textContent = `WATER RISING (${waterCm.toFixed(1)} cm)`;
+        ledAlarm.className = 'w-2 h-2 rounded-full bg-amber-500';
+        alarmText.textContent = 'DRAIN WARNING';
+        alarmText.className = 'text-[10px] text-amber-400 font-bold';
+      } else {
+        clogAlertPill.className = 'text-[11px] font-bold font-mono px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+        clogAlertPill.textContent = `DRAINAGE OK (${waterCm.toFixed(1)} cm)`;
+        ledAlarm.className = 'w-2 h-2 rounded-full bg-red-950 border border-red-800';
+        alarmText.textContent = 'ALARM OK';
+        alarmText.className = 'text-[10px] text-slate-500';
+      }
+    }
+
+    // =========================================================================
+    // 4. OLED DISPLAY RENDERING (128x64 Pixels emulation)
+    // =========================================================================
+    function drawOled() {
+      oledCtx.fillStyle = '#020509';
+      oledCtx.fillRect(0, 0, 256, 128);
+
+      // Top Inverted Header Banner
+      oledCtx.fillStyle = '#ffffff';
+      oledCtx.fillRect(0, 0, 256, 24);
+
+      oledCtx.fillStyle = '#000000';
+      oledCtx.font = 'bold 12px "JetBrains Mono", monospace';
+      oledCtx.fillText('SHAKTHI BOAT', 6, 17);
+      oledCtx.fillText(`${oledPage + 1}/4`, 216, 17);
+
+      oledCtx.fillStyle = '#ffffff';
+
+      // PAGE SPECIFIC RENDERING
+      if (oledPage === 0) {
+        // --- SCREEN 1: DASHBOARD ---
+        oledCtx.font = 'bold 12px "JetBrains Mono", monospace';
+        oledCtx.fillText('Quality: ' + fishGrade, 6, 44);
+
+        // Freshness Bar
+        oledCtx.fillText(`Fresh: ${freshnessScore}%`, 6, 64);
+        oledCtx.strokeRect(140, 53, 108, 12);
+        const barW = (freshnessScore / 100) * 104;
+        oledCtx.fillRect(142, 55, barW, 8);
+
+        // Temp & Water
+        const tStateStr = tempState === 'OPTIMAL' ? '[OK]' : (tempState === 'WARM' ? '[WRN]' : '[HOT]');
+        oledCtx.fillText(`Temp : ${tempC.toFixed(1)}°C ${tStateStr}`, 6, 88);
+
+        const wStateStr = drainState === 'CLEAR' ? '[CLEAN]' : (drainState === 'RISING' ? '[POOL]' : '[CLOG!]');
+        oledCtx.fillText(`Water: ${waterCm.toFixed(1)}cm ${wStateStr}`, 6, 108);
+
+      } else if (oledPage === 1) {
+        // --- SCREEN 2: GAS & SPOILAGE ---
+        oledCtx.font = 'bold 11px "JetBrains Mono", monospace';
+        oledCtx.fillText('GAS / SPOILAGE SENSOR', 6, 42);
+
+        const ppm = ((gasAdc / 180) * 10.0).toFixed(1);
+        oledCtx.fillText(`MQ135 Raw: ${gasAdc}`, 6, 62);
+        oledCtx.fillText(`TVB-N Est: ${ppm} ppm`, 6, 80);
+
+        const ch4Str = mq4Alarm ? 'DETECTED!' : 'CLEAR (OK)';
+        oledCtx.fillText(`MQ-4 CH4 : ${ch4Str}`, 6, 98);
+
+        // Gas Risk Bar
+        oledCtx.strokeRect(6, 108, 244, 12);
+        const gasFill = Math.min(240, Math.max(0, ((gasAdc - 150) / 650) * 240));
+        oledCtx.fillRect(8, 110, gasFill, 8);
+
+      } else if (oledPage === 2) {
+        // --- SCREEN 3: ICE HOLD & DRAINAGE ---
+        oledCtx.font = 'bold 11px "JetBrains Mono", monospace';
+        oledCtx.fillText('ICE HOLD & DRAINAGE', 6, 42);
+
+        oledCtx.fillText(`Ice Temp: ${tempC.toFixed(1)}°C (0-4°C)`, 6, 62);
+        oledCtx.fillText(`Humidity: 88% RH`, 6, 80);
+        oledCtx.fillText(`Meltwater : ${waterCm.toFixed(1)} cm`, 6, 98);
+
+        let drainMsg = 'Status: ICE ONLY (OK)';
+        if (drainState === 'RISING') drainMsg = 'Status: WATER RISING';
+        else if (drainState === 'CLOGGED') drainMsg = 'Status: CLOGGED! DRAIN';
+        oledCtx.fillText(drainMsg, 6, 116);
+
+      } else if (oledPage === 3) {
+        // --- SCREEN 4: TRIP DIAGNOSTICS ---
+        oledCtx.font = 'bold 11px "JetBrains Mono", monospace';
+        oledCtx.fillText('BOAT TRIP DIAGNOSTICS', 6, 42);
+
+        const hrs = Math.floor(voyageSeconds / 3600).toString().padStart(2, '0');
+        const mins = Math.floor((voyageSeconds % 3600) / 60).toString().padStart(2, '0');
+        const secs = (voyageSeconds % 60).toString().padStart(2, '0');
+        oledCtx.fillText(`Voyage  : ${hrs}:${mins}:${secs}`, 6, 62);
+        oledCtx.fillText(`Hold Dep: ${TANK_DEPTH_TOTAL_CM} cm`, 6, 80);
+
+        const tmStr = ['TEMP', 'WATER', 'SCORE', 'AUTO'][tmMode];
+        oledCtx.fillText(`7-Seg Mod: ${tmStr}`, 6, 98);
+        oledCtx.fillText(`Nav: [D3-N] [D0-P] [RX-M]`, 6, 116);
+      }
+
+      // FLASHING EMERGENCY BANNER OVERLAY
+      if (drainState === 'CLOGGED' && Math.floor(Date.now() / 400) % 2 === 0) {
+        oledCtx.fillStyle = '#ffffff';
+        oledCtx.fillRect(0, 102, 256, 26);
+        oledCtx.fillStyle = '#000000';
+        oledCtx.font = 'bold 13px "JetBrains Mono", monospace';
+        oledCtx.fillText('! DRAIN WATER CLOG !', 34, 120);
+      } else if (fishGrade === 'SPOILED' && Math.floor(Date.now() / 400) % 2 === 0) {
+        oledCtx.fillStyle = '#ffffff';
+        oledCtx.fillRect(0, 102, 256, 26);
+        oledCtx.fillStyle = '#000000';
+        oledCtx.font = 'bold 13px "JetBrains Mono", monospace';
+        oledCtx.fillText('! FISH DECAY ALERT !', 34, 120);
+      }
+
+      oledPageBadge.textContent = `PAGE ${oledPage + 1}/4`;
+    }
+
+    // =========================================================================
+    // 5. TM1637 4-DIGIT 7-SEGMENT DISPLAY RENDERING (SVG)
+    // =========================================================================
+    // 7-segment bit patterns: A, B, C, D, E, F, G
+    const SEG_PATTERNS = {
+      '0': [1,1,1,1,1,1,0],
+      '1': [0,1,1,0,0,0,0],
+      '2': [1,1,0,1,1,0,1],
+      '3': [1,1,1,1,0,0,1],
+      '4': [0,1,1,0,0,1,1],
+      '5': [1,0,1,1,0,1,1],
+      '6': [1,0,1,1,1,1,1],
+      '7': [1,1,1,0,0,0,0],
+      '8': [1,1,1,1,1,1,1],
+      '9': [1,1,1,1,0,1,1],
+      ' ': [0,0,0,0,0,0,0],
+      '-': [0,0,0,0,0,0,1],
+      'C': [1,0,0,1,1,1,0],
+      'H': [0,1,1,0,1,1,1],
+      'F': [1,0,0,0,1,1,1],
+      'r': [0,0,0,0,1,0,1],
+      'd': [0,1,1,1,1,0,1],
+      'A': [1,1,1,0,1,1,1],
+      'n': [0,0,1,0,1,0,1],
+      'o': [0,0,1,1,1,0,1],
+      't': [0,0,0,1,1,1,1],
+      'b': [0,0,1,1,1,1,1]
+    };
+
+    function render7SegmentSvg() {
+      const svg = document.getElementById('tm1637Svg');
+      let chars = [' ', ' ', ' ', ' '];
+      let dots = [false, false, false, false];
+
+      // EMERGENCY OVERWRITE: If meltwater is clogged, blink "drAn"
+      if (drainState === 'CLOGGED') {
+        if (Math.floor(Date.now() / 400) % 2 === 0) {
+          chars = ['d', 'r', 'A', 'n'];
+        } else {
+          chars = [' ', ' ', ' ', ' '];
+        }
+      } else {
+        let active = tmMode;
+        if (tmMode === 3) active = tmAutoSubMode;
+
+        if (active === 0) {
+          // Temperature: e.g. " 2.5C"
+          const tVal = tempC.toFixed(1);
+          if (tempC >= 10.0) {
+            chars = [tVal[0], tVal[1], tVal[3], 'C'];
+            dots[1] = true;
+          } else {
+            chars = [' ', tVal[0], tVal[2], 'C'];
+            dots[1] = true;
+          }
+        } else if (active === 1) {
+          // Water Level: e.g. "H 1.2"
+          const wVal = waterCm.toFixed(1);
+          if (waterCm >= 10.0) {
+            chars = ['H', wVal[0], wVal[1], wVal[3]];
+            dots[2] = true;
+          } else {
+            chars = ['H', ' ', wVal[0], wVal[2]];
+            dots[2] = true;
+          }
+        } else if (active === 2) {
+          // Freshness: e.g. "Fr85"
+          const fStr = freshnessScore.toString().padStart(2, '0');
+          chars = ['F', 'r', fStr[0], fStr[1]];
+        }
+      }
+
+      // Generate SVG markup for 4 digits
+      let svgHtml = '';
+      const digitWidth = 42;
+      const spacing = 48;
+
+      for (let i = 0; i < 4; i++) {
+        const xOffset = 6 + i * spacing;
+        const char = chars[i] || ' ';
+        const segs = SEG_PATTERNS[char] || SEG_PATTERNS[' '];
+        const hasDot = dots[i];
+
+        // Draw segments: A, B, C, D, E, F, G
+        // SVG paths for 7 segments
+        svgHtml += `
+          <g transform="translate(${xOffset}, 5)">
+            <!-- Seg A (Top horizontal) -->
+            <polygon class="segment ${segs[0] ? 'seg-on' : 'seg-off'}" points="4,2 24,2 20,6 8,6"/>
+            <!-- Seg B (Top right vertical) -->
+            <polygon class="segment ${segs[1] ? 'seg-on' : 'seg-off'}" points="25,4 25,24 21,20 21,8"/>
+            <!-- Seg C (Bottom right vertical) -->
+            <polygon class="segment ${segs[2] ? 'seg-on' : 'seg-off'}" points="25,27 25,48 21,44 21,31"/>
+            <!-- Seg D (Bottom horizontal) -->
+            <polygon class="segment ${segs[3] ? 'seg-on' : 'seg-off'}" points="4,50 24,50 20,46 8,46"/>
+            <!-- Seg E (Bottom left vertical) -->
+            <polygon class="segment ${segs[4] ? 'seg-on' : 'seg-off'}" points="3,27 7,31 7,44 3,48"/>
+            <!-- Seg F (Top left vertical) -->
+            <polygon class="segment ${segs[5] ? 'seg-on' : 'seg-off'}" points="3,4 7,8 7,20 3,24"/>
+            <!-- Seg G (Middle horizontal) -->
+            <polygon class="segment ${segs[6] ? 'seg-on' : 'seg-off'}" points="5,25 9,23 19,23 23,25 19,27 9,27"/>
+            <!-- Decimal Point -->
+            <circle class="segment ${hasDot ? 'seg-on' : 'seg-off'}" cx="29" cy="48" r="2.5"/>
+          </g>
+        `;
+      }
+
+      svg.innerHTML = svgHtml;
+      tmModeBadge.textContent = `MODE: ${['TEMP', 'WATER', 'SCORE', 'AUTO'][tmMode]}`;
+    }
+
+    // =========================================================================
+    // 6. HOLD CROSS-SECTION CANVAS (2D Physics & Visuals)
+    // =========================================================================
+    function drawHold() {
+      const w = holdCanvas.width;
+      const h = holdCanvas.height;
+
+      holdCtx.clearRect(0, 0, w, h);
+
+      // Background boat hold hull
+      holdCtx.fillStyle = '#0a101d';
+      holdCtx.fillRect(0, 0, w, h);
+
+      // Insulated Container Boundaries
+      holdCtx.fillStyle = '#111a2e';
+      holdCtx.strokeStyle = '#27354f';
+      holdCtx.lineWidth = 4;
+      holdCtx.strokeRect(60, 40, w - 120, h - 70);
+      holdCtx.fillRect(60, 40, w - 120, h - 70);
+
+      // Drainage Well Sump at Bottom
+      const sumpW = 160;
+      const sumpH = 30;
+      const sumpX = (w - sumpW) / 2;
+      const sumpY = h - 30;
+      holdCtx.fillStyle = '#080d17';
+      holdCtx.fillRect(sumpX, sumpY - 10, sumpW, sumpH);
+      holdCtx.strokeRect(sumpX, sumpY - 10, sumpW, sumpH);
+
+      // Drainage Outlet Pipe
+      holdCtx.fillStyle = '#1e293b';
+      holdCtx.fillRect(sumpX + sumpW - 10, sumpY, 40, 16);
+
+      // CALCULATE HEIGHTS
+      const containerH = h - 100;
+      const waterHeightPx = Math.min(containerH, (waterCm / 15.0) * (containerH * 0.7));
+      const waterTopY = (h - 30) - waterHeightPx;
+
+      // 1. MELTWATER (Accumulated at the bottom)
+      if (waterHeightPx > 2) {
+        if (drainState === 'CLOGGED') {
+          // Dirty stagnant contaminated leachate (yellowish brown)
+          holdCtx.fillStyle = 'rgba(234, 88, 12, 0.65)';
+        } else {
+          // Fresh chilled meltwater
+          holdCtx.fillStyle = 'rgba(14, 165, 233, 0.45)';
+        }
+        holdCtx.fillRect(62, waterTopY, w - 124, waterHeightPx);
+
+        // Water surface line
+        holdCtx.strokeStyle = drainState === 'CLOGGED' ? '#f97316' : '#38bdf8';
+        holdCtx.lineWidth = 2;
+        holdCtx.beginPath();
+        holdCtx.moveTo(62, waterTopY);
+        holdCtx.lineTo(w - 62, waterTopY);
+        holdCtx.stroke();
+      }
+
+      // 2. CRUSHED BLOCK ICE LAYER
+      const iceTopY = 120;
+      const iceBottomY = Math.min(waterTopY, h - 30);
+      const iceHeight = Math.max(0, iceBottomY - iceTopY);
+
+      if (iceHeight > 10) {
+        // Draw ice cubes/crystals texture
+        holdCtx.fillStyle = 'rgba(224, 242, 254, 0.35)';
+        holdCtx.fillRect(64, iceTopY, w - 128, iceHeight);
+
+        // Scattered ice chunk patterns
+        holdCtx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        for (let ix = 80; ix < w - 80; ix += 28) {
+          for (let iy = iceTopY + 10; iy < iceBottomY - 10; iy += 22) {
+            holdCtx.fillRect(ix, iy, 12, 10);
+            holdCtx.strokeStyle = '#bae6fd';
+            holdCtx.lineWidth = 1;
+            holdCtx.strokeRect(ix, iy, 12, 10);
+          }
+        }
+      }
+
+      // 3. MARINE CATCH (FISH RESTING ON ICE)
+      const fishY = 140;
+      drawFish(holdCtx, 160, fishY, '#38bdf8', '#0284c7');
+      drawFish(holdCtx, 280, fishY - 8, '#7dd3fc', '#0369a1');
+      drawFish(holdCtx, 400, fishY + 4, '#0ea5e9', '#075985');
+      drawFish(holdCtx, 220, fishY + 35, '#38bdf8', '#0284c7');
+      drawFish(holdCtx, 340, fishY + 32, '#7dd3fc', '#0369a1');
+
+      // SUBMERGED FISH CONTAMINATION WARNING
+      if (waterTopY < fishY + 45) {
+        holdCtx.fillStyle = 'rgba(239, 68, 68, 0.3)';
+        holdCtx.fillRect(62, waterTopY, w - 124, (fishY + 50) - waterTopY);
+
+        holdCtx.fillStyle = '#ef4444';
+        holdCtx.font = 'bold 12px "JetBrains Mono", monospace';
+        holdCtx.fillText('⚠️ CONTAMINATION HAZARD: FISH SUBMERGED IN DIRTY MELTWATER!', 80, 75);
+      }
+
+      // 4. ULTRASONIC SENSOR AT TOP HATCH
+      const sensorX = w / 2;
+      const sensorY = 40;
+      holdCtx.fillStyle = '#475569';
+      holdCtx.fillRect(sensorX - 25, sensorY - 12, 50, 16);
+      // Dual transducers
+      holdCtx.fillStyle = '#94a3b8';
+      holdCtx.beginPath();
+      holdCtx.arc(sensorX - 12, sensorY + 4, 8, 0, Math.PI * 2);
+      holdCtx.arc(sensorX + 12, sensorY + 4, 8, 0, Math.PI * 2);
+      holdCtx.fill();
+
+      // Ultrasonic Sound Waves Pinging Down
+      const waveY = 55 + (Date.now() / 8) % (waterTopY - 55);
+      holdCtx.strokeStyle = 'rgba(56, 189, 248, 0.6)';
+      holdCtx.lineWidth = 2;
+      holdCtx.beginPath();
+      holdCtx.arc(sensorX, 48, waveY - 48, Math.PI * 0.35, Math.PI * 0.65);
+      holdCtx.stroke();
+
+      // Sensor distance marker
+      holdCtx.fillStyle = '#38bdf8';
+      holdCtx.font = 'bold 11px monospace';
+      holdCtx.fillText(`Ultrasonic Ping: ${(TANK_DEPTH_TOTAL_CM - waterCm).toFixed(1)} cm Clearance`, sensorX + 35, 60);
+
+      // 5. GAS SENSORS (MQ-135 & MQ-4) IN HEADSPACE
+      holdCtx.fillStyle = '#b45309';
+      holdCtx.fillRect(90, 32, 24, 14);
+      holdCtx.fillStyle = '#f59e0b';
+      holdCtx.fillText('MQ-135', 82, 26);
+
+      holdCtx.fillStyle = '#047857';
+      holdCtx.fillRect(w - 114, 32, 24, 14);
+      holdCtx.fillStyle = '#10b981';
+      holdCtx.fillText('MQ-4', w - 118, 26);
+
+      // Gas particles in headspace
+      if (gasAdc > 350 || mq4Alarm) {
+        holdCtx.fillStyle = mq4Alarm ? 'rgba(239, 68, 68, 0.25)' : 'rgba(245, 158, 11, 0.2)';
+        holdCtx.fillRect(62, 40, w - 124, 75);
+      }
+    }
+
+    function drawFish(ctx, x, y, bodyColor, finColor) {
+      ctx.save();
+      ctx.translate(x, y);
+
+      // Body
+      ctx.fillStyle = bodyColor;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 32, 14, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Tail
+      ctx.fillStyle = finColor;
+      ctx.beginPath();
+      ctx.moveTo(-28, 0);
+      ctx.lineTo(-44, -12);
+      ctx.lineTo(-40, 0);
+      ctx.lineTo(-44, 12);
+      ctx.closePath();
+      ctx.fill();
+
+      // Dorsal Fin
+      ctx.beginPath();
+      ctx.moveTo(-5, -14);
+      ctx.lineTo(8, -22);
+      ctx.lineTo(14, -14);
+      ctx.closePath();
+      ctx.fill();
+
+      // Eye
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(20, -3, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#000000';
+      ctx.beginPath();
+      ctx.arc(21, -3, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    // =========================================================================
+    // 7. TERMINAL TELEMETRY LOGGER
+    // =========================================================================
+    let lastLogTime = 0;
+    function logTelemetry() {
+      const now = Date.now();
+      if (now - lastLogTime >= 1200) {
+        lastLogTime = now;
+        voyageSeconds++;
+
+        const p = document.createElement('div');
+        let colorClass = 'text-slate-300';
+        if (drainState === 'CLOGGED') colorClass = 'text-rose-400 font-bold';
+        else if (fishGrade === 'SPOILED') colorClass = 'text-rose-300 font-bold';
+        else if (tempState === 'WARM') colorClass = 'text-amber-300';
+
+        p.className = colorClass;
+        p.textContent = `[${new Date().toLocaleTimeString()}] Voyage: ${voyageSeconds}s | Temp: ${tempC.toFixed(1)}C | Water: ${waterCm.toFixed(1)}cm | Drain: ${drainState} | Gas_ADC: ${gasAdc} | CH4: ${mq4Alarm ? 'ALERT' : 'OK'} | Score: ${freshnessScore}% | Grade: ${fishGrade}`;
+        terminal.appendChild(p);
+        terminal.scrollTop = terminal.scrollHeight;
+
+        // Keep last 40 lines
+        if (terminal.children.length > 40) {
+          terminal.removeChild(terminal.children[0]);
+        }
+
+        // Trigger intermittent audio beep if alarm state
+        if (drainState === 'CLOGGED') {
+          playBeep(2600, 0.15);
+        } else if (fishGrade === 'SPOILED') {
+          playBeep(1800, 0.2);
+        }
+      }
+    }
+
+    // =========================================================================
+    // 8. EVENT LISTENERS & HARDWARE INTERACTION
+    // =========================================================================
+    sliderTemp.addEventListener('input', (e) => {
+      tempC = parseFloat(e.target.value);
+      valTemp.textContent = `${tempC.toFixed(1)} °C`;
+      evaluateFishQuality();
+    });
+
+    sliderWater.addEventListener('input', (e) => {
+      waterCm = parseFloat(e.target.value);
+      valWater.textContent = `${waterCm.toFixed(1)} cm`;
+      evaluateFishQuality();
+    });
+
+    sliderGas.addEventListener('input', (e) => {
+      gasAdc = parseInt(e.target.value);
+      const ppm = ((gasAdc / 180) * 10.0).toFixed(0);
+      valGas.textContent = `${gasAdc} ADC (${ppm} ppm)`;
+      evaluateFishQuality();
+    });
+
+    toggleMq4.addEventListener('change', (e) => {
+      mq4Alarm = e.target.checked;
+      evaluateFishQuality();
+    });
+
+    // Hardware Buttons
+    const btnNext = document.getElementById('btn-hw-next');
+    const btnPrev = document.getElementById('btn-hw-prev');
+    const btnSelect = document.getElementById('btn-hw-select');
+
+    btnNext.addEventListener('click', () => {
+      oledPage = (oledPage + 1) % 4;
+      playBeep(1400, 0.05);
+    });
+
+    btnPrev.addEventListener('click', () => {
+      oledPage = (oledPage - 1 + 4) % 4;
+      playBeep(1200, 0.05);
+    });
+
+    btnSelect.addEventListener('mousedown', () => {
+      selectPressStartTime = Date.now();
+    });
+
+    btnSelect.addEventListener('mouseup', () => {
+      const pressDuration = Date.now() - selectPressStartTime;
+      if (pressDuration > 1200) {
+        // Long Press: Mute / Acknowledge Alarm
+        alarmMuted = !alarmMuted;
+        playBeep(800, 0.25);
+      } else {
+        // Short Press: Cycle 7-Segment Mode
+        tmMode = (tmMode + 1) % 4;
+        playBeep(1600, 0.06);
+      }
+    });
+
+    // Presets
+    document.getElementById('preset-fresh').addEventListener('click', () => {
+      setPreset(2.0, 0.5, 180, false);
+    });
+    document.getElementById('preset-warm').addEventListener('click', () => {
+      setPreset(6.5, 3.2, 380, false);
+    });
+    document.getElementById('preset-clog').addEventListener('click', () => {
+      setPreset(3.0, 8.5, 240, false);
+    });
+    document.getElementById('preset-spoil').addEventListener('click', () => {
+      setPreset(14.0, 7.5, 680, true);
+    });
+
+    function setPreset(t, w, g, m) {
+      tempC = t;
+      waterCm = w;
+      gasAdc = g;
+      mq4Alarm = m;
+
+      sliderTemp.value = t;
+      sliderWater.value = w;
+      sliderGas.value = g;
+      toggleMq4.checked = m;
+
+      valTemp.textContent = `${t.toFixed(1)} °C`;
+      valWater.textContent = `${w.toFixed(1)} cm`;
+      valGas.textContent = `${g} ADC`;
+
+      evaluateFishQuality();
+      playBeep(1800, 0.08);
+    }
+
+    // Audio Toggle
+    document.getElementById('btn-audio-toggle').addEventListener('click', () => {
+      audioEnabled = !audioEnabled;
+      document.getElementById('audio-icon').textContent = audioEnabled ? '🔊' : '🔇';
+      document.getElementById('audio-label').textContent = audioEnabled ? 'Alarm Audio ON' : 'Alarm Audio OFF';
+    });
+
+    // Clear Terminal
+    document.getElementById('btn-clear-term').addEventListener('click', () => {
+      terminal.innerHTML = '';
+    });
+
+    // 7-Segment Auto-cycle timer
+    setInterval(() => {
+      if (tmMode === 3) {
+        tmAutoSubMode = (tmAutoSubMode + 1) % 3;
+      }
+    }, 3000);
+
+    // =========================================================================
+    // 9. ANIMATION LOOP
+    // =========================================================================
+    function animate() {
+      drawOled();
+      render7SegmentSvg();
+      drawHold();
+      logTelemetry();
+      requestAnimationFrame(animate);
+    }
+
+    evaluateFishQuality();
+    requestAnimationFrame(animate);
+  </script>
+</body>
+</html>

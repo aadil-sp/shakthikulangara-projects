@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ArUcoNav: Indoor Cross-Building Navigation & ESP32-WROOM-32 Simulator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .btn-active:active {
+      transform: scale(0.95);
+      background-color: #ea580c !important;
+    }
+    canvas {
+      cursor: crosshair;
+    }
+  </style>
+</head>
+<body class="bg-[#05070a] text-slate-100 min-h-screen flex flex-col justify-between selection:bg-orange-500 selection:text-white">
+
+  <!-- Top Header / Navigation -->
+  <header class="border-b border-slate-800 bg-[#090d16]/95 backdrop-blur sticky top-0 z-50 px-4 py-2.5">
+    <div class="max-w-6xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-orange-500/20 border border-orange-500/40 flex items-center justify-center text-orange-400 font-black text-lg">
+          🏁
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-sm font-bold tracking-tight text-white">ArUcoNav &bull; INDOOR BUILDING SIMULATOR</h1>
+            <span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/30 uppercase tracking-wider">
+              ESP32-WROOM-32
+            </span>
+          </div>
+          <p class="text-xs text-slate-400">Overhead Vision Tracking &bull; Cross-Corridor Navigation &bull; Connection Alarm</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button id="btn-toggle-sound" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold border border-slate-700 flex items-center gap-1.5 transition">
+          <span id="sound-icon">🔊</span> <span id="sound-label">Audio ON</span>
+        </button>
+        <button id="btn-toggle-conn" class="px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 text-xs font-bold font-mono border border-emerald-500/40 flex items-center gap-1.5 transition">
+          <span id="conn-dot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span id="conn-label">CONNECTED</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Grid Layout -->
+  <main class="max-w-6xl mx-auto w-full p-3 sm:p-4 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+    <!-- Left Column: Overhead Cross-Building Canvas (7 cols) -->
+    <div class="lg:col-span-7 flex flex-col gap-3">
+
+      <!-- Canvas Card -->
+      <div class="bg-[#0b1120] border border-slate-800 rounded-2xl p-3 flex flex-col items-center relative overflow-hidden shadow-2xl">
+        <div class="w-full flex items-center justify-between mb-2 px-1">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-cyan-400"></span> Overhead Vision Feed
+            </span>
+            <span class="text-[10px] font-mono text-cyan-400 px-2 py-0.5 rounded bg-cyan-950/60 border border-cyan-800/40">
+              ArUco ID #0 (DICT_4X4_50)
+            </span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button id="btn-clear-path" class="text-[11px] font-bold px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700">Clear Waypoints</button>
+            <button id="btn-reset-pos" class="text-[11px] font-bold px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700">Reset Car</button>
+          </div>
+        </div>
+
+        <!-- Canvas Container -->
+        <div class="relative w-full aspect-[4/3] max-h-[460px] bg-[#070b14] rounded-xl overflow-hidden border border-slate-800">
+          <canvas id="navCanvas" class="w-full h-full block"></canvas>
+          
+          <!-- Quick Instructions Overlay -->
+          <div class="absolute bottom-2 left-2 bg-slate-900/80 backdrop-blur border border-slate-800 text-[10px] font-mono text-slate-400 px-2.5 py-1.5 rounded-lg pointer-events-none">
+            📍 <strong class="text-white">Tap / Click anywhere</strong> to set navigation waypoint
+          </div>
+
+          <!-- Pose HUD Chip -->
+          <div class="absolute top-2 right-2 bg-slate-900/90 backdrop-blur border border-cyan-500/30 text-[11px] font-mono text-cyan-300 px-2.5 py-1.5 rounded-lg pointer-events-none">
+            <div id="pose-coords">X: 0.0 &bull; Y: 0.0 &bull; &theta;: 0&deg;</div>
+          </div>
+        </div>
+
+        <!-- Status Alarm Banner -->
+        <div id="alarm-banner" class="mt-2.5 w-full py-2 px-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span id="alarm-icon">🔔</span>
+            <span id="alarm-text">SYSTEM NORMAL &bull; ESP-NOW RADIO ACTIVE</span>
+          </div>
+          <span id="alarm-state" class="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300">
+            LINK OK
+          </span>
+        </div>
+      </div>
+
+      <!-- Ultrasonic Telemetry Gauges -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+        <div class="bg-[#0b1120] border border-slate-800 rounded-xl p-2.5 flex flex-col justify-between">
+          <span class="text-[10px] font-bold text-slate-400 uppercase">US Left (D5/D18)</span>
+          <div class="my-1 flex items-baseline gap-1">
+            <span id="gauge-us-l" class="text-lg font-black font-mono text-cyan-400">85.0</span>
+            <span class="text-xs text-slate-500 font-mono">cm</span>
+          </div>
+          <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+            <div id="bar-us-l" class="bg-cyan-400 h-full w-[85%] transition-all"></div>
+          </div>
+        </div>
+
+        <div class="bg-[#0b1120] border border-slate-800 rounded-xl p-2.5 flex flex-col justify-between">
+          <span class="text-[10px] font-bold text-slate-400 uppercase">US Right (D19/D21)</span>
+          <div class="my-1 flex items-baseline gap-1">
+            <span id="gauge-us-r" class="text-lg font-black font-mono text-cyan-400">82.0</span>
+            <span class="text-xs text-slate-500 font-mono">cm</span>
+          </div>
+          <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+            <div id="bar-us-r" class="bg-cyan-400 h-full w-[82%] transition-all"></div>
+          </div>
+        </div>
+
+        <div class="bg-[#0b1120] border border-slate-800 rounded-xl p-2.5 flex flex-col justify-between">
+          <span class="text-[10px] font-bold text-slate-400 uppercase">Motor L / R PWM</span>
+          <div class="my-1 flex items-baseline gap-1">
+            <span id="gauge-pwms" class="text-lg font-black font-mono text-orange-400">0 / 0</span>
+          </div>
+          <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+            <div id="bar-pwm" class="bg-orange-500 h-full w-0 transition-all"></div>
+          </div>
+        </div>
+
+        <div class="bg-[#0b1120] border border-slate-800 rounded-xl p-2.5 flex flex-col justify-between">
+          <span class="text-[10px] font-bold text-slate-400 uppercase">Car 2S LiPo</span>
+          <div class="my-1 flex items-baseline gap-1">
+            <span class="text-lg font-black font-mono text-emerald-400">7.8</span>
+            <span class="text-xs text-slate-500 font-mono">V</span>
+          </div>
+          <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+            <div class="bg-emerald-400 h-full w-[88%]"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: Controls, Building Layouts & Terminal (5 cols) -->
+    <div class="lg:col-span-5 flex flex-col gap-3">
+
+      <!-- Indoor Building Environment Selector -->
+      <div class="bg-[#0b1120] border border-slate-800 rounded-2xl p-3.5">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Indoor Building Architecture</span>
+          <span class="text-[10px] font-mono text-orange-400">Cross Indoor Facility</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <button id="map-cross" class="map-btn p-2 rounded-xl bg-orange-500 text-white font-bold border border-orange-400 transition text-left flex items-center gap-2">
+            <span>🏢</span> Cross Corridors & 4 Rooms
+          </button>
+          <button id="map-arena" class="map-btn p-2 rounded-xl bg-slate-800 text-slate-300 font-bold border border-slate-700 transition text-left flex items-center gap-2 hover:bg-slate-700">
+            <span>🏛️</span> Open Hall with Columns
+          </button>
+        </div>
+      </div>
+
+      <!-- Touch D-Pad & Emergency Controls -->
+      <div class="bg-[#0b1120] border border-slate-800 rounded-2xl p-4 flex flex-col items-center">
+        <div class="w-full flex justify-between items-center mb-3">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Manual Override Controls</span>
+          <span class="text-[10px] font-mono text-slate-500">Keys: W A S D &bull; Space</span>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2 w-[210px] max-w-full">
+          <div></div>
+          <button id="ctrl-fwd" class="btn-active h-14 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 flex flex-col items-center justify-center text-slate-100 shadow transition">
+            <span class="text-lg">▲</span>
+            <span class="text-[9px] font-bold font-mono">FWD</span>
+          </button>
+          <div></div>
+
+          <button id="ctrl-left" class="btn-active h-14 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 flex flex-col items-center justify-center text-slate-100 shadow transition">
+            <span class="text-lg">◀</span>
+            <span class="text-[9px] font-bold font-mono">LEFT</span>
+          </button>
+          <button id="ctrl-stop" class="btn-active h-14 rounded-2xl bg-red-600/90 hover:bg-red-500 border border-red-400/50 flex flex-col items-center justify-center text-white shadow-lg shadow-red-600/30 transition">
+            <span class="text-lg">🛑</span>
+            <span class="text-[9px] font-black font-mono">STOP</span>
+          </button>
+          <button id="ctrl-right" class="btn-active h-14 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 flex flex-col items-center justify-center text-slate-100 shadow transition">
+            <span class="text-lg">▶</span>
+            <span class="text-[9px] font-bold font-mono">RIGHT</span>
+          </button>
+
+          <div></div>
+          <button id="ctrl-rev" class="btn-active h-14 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 flex flex-col items-center justify-center text-slate-100 shadow transition">
+            <span class="text-lg">▼</span>
+            <span class="text-[9px] font-bold font-mono">REV</span>
+          </button>
+          <div></div>
+        </div>
+
+        <div class="w-full mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-xs">
+          <span class="text-slate-400 font-bold">Speed PWM:</span>
+          <input id="slider-pwm" type="range" min="80" max="255" value="180" class="w-32 accent-orange-500 bg-slate-800 h-2 rounded cursor-pointer">
+          <span id="label-pwm" class="font-mono text-orange-400 font-bold">180</span>
+        </div>
+      </div>
+
+      <!-- Live ESP-NOW Serial Telemetry Terminal -->
+      <div class="bg-[#0b1120] border border-slate-800 rounded-2xl p-3 flex flex-col h-[200px]">
+        <div class="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-800 text-xs">
+          <span class="font-bold font-mono text-slate-400 flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-emerald-400"></span> USB Serial Stream (115200)
+          </span>
+          <button id="btn-clear-term" class="text-[10px] font-mono text-slate-500 hover:text-slate-300">Clear</button>
+        </div>
+        <div id="term-stream" class="flex-1 overflow-y-auto font-mono text-[11px] leading-relaxed space-y-1 text-slate-300 pr-1">
+          <div class="text-emerald-400">[INIT] ESP32-WROOM-32 USB Gateway initialized.</div>
+          <div class="text-slate-400">[ESP-NOW] Target car paired &bull; Buzzer connection chime armed.</div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Bottom Details & Quick Jump -->
+  <footer class="border-t border-slate-800 bg-[#090d16] px-4 py-2.5 text-xs text-slate-400">
+    <div class="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-2">
+      <div>
+        <strong class="text-slate-200">ArUcoNav STEM Robotics</strong> &bull; Shakthikulangara School & Adilitix Robotics
+      </div>
+      <div class="flex items-center gap-3">
+        <a href="/projects" class="text-orange-400 hover:underline">📁 Project Manager</a>
+        <a href="/projects/shakthikulangara-robotics" class="text-cyan-400 hover:underline">📖 Blueprint & Schematics</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Simulation & Physics Script -->
+  <script>
+    // Audio Synthesizer (Web Audio API)
+    let audioCtx = null;
+    let soundEnabled = true;
+
+    function getAudioContext() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      return audioCtx;
+    }
+
+    function playBeep(freq, durationMs, type = 'sine') {
+      if (!soundEnabled) return;
+      try {
+        const ctx = getAudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        gain.gain.setValueAtTime(0.12, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + (durationMs / 1000));
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + (durationMs / 1000));
+      } catch (e) {
+        console.warn('Audio error:', e);
+      }
+    }
+
+    function playConnectionChime() {
+      // Ascending dual chime
+      playBeep(2000, 80);
+      setTimeout(() => playBeep(2600, 140), 90);
+    }
+
+    function playLostAlarm() {
+      // Descending warning pulses
+      playBeep(800, 110, 'sawtooth');
+      setTimeout(() => playBeep(600, 150, 'sawtooth'), 130);
+    }
+
+    function playObstacleBuzz() {
+      playBeep(3200, 60, 'square');
+    }
+
+    // Toggle Sound Button
+    const soundBtn = document.getElementById('btn-toggle-sound');
+    soundBtn.addEventListener('click', () => {
+      soundEnabled = !soundEnabled;
+      document.getElementById('sound-icon').innerText = soundEnabled ? '🔊' : '🔇';
+      document.getElementById('sound-label').innerText = soundEnabled ? 'Audio ON' : 'Muted';
+      if (soundEnabled) playBeep(1800, 60);
+    });
+
+    // Connection State & Alarm
+    let isConnected = true;
+    let lostAlarmInterval = null;
+    const connBtn = document.getElementById('btn-toggle-conn');
+    const connLabel = document.getElementById('conn-label');
+    const connDot = document.getElementById('conn-dot');
+    const alarmBanner = document.getElementById('alarm-banner');
+    const alarmIcon = document.getElementById('alarm-icon');
+    const alarmText = document.getElementById('alarm-text');
+    const alarmState = document.getElementById('alarm-state');
+
+    function setConnection(connected) {
+      isConnected = connected;
+      if (connected) {
+        if (lostAlarmInterval) {
+          clearInterval(lostAlarmInterval);
+          lostAlarmInterval = null;
+        }
+        connBtn.className = "px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 text-xs font-bold font-mono border border-emerald-500/40 flex items-center gap-1.5 transition";
+        connDot.className = "w-2 h-2 rounded-full bg-emerald-400 animate-pulse";
+        connLabel.innerText = "CONNECTED";
+
+        alarmBanner.className = "mt-2.5 w-full py-2 px-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono flex items-center justify-between";
+        alarmIcon.innerText = "🔔";
+        alarmText.innerText = "ESP32-WROOM-32 LINK ACTIVE • RADIO SYNCED";
+        alarmState.className = "text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300";
+        alarmState.innerText = "LINK OK";
+
+        playConnectionChime();
+        termLog("[ESP-NOW] Car reconnected to ESP32-WROOM-32 gateway! Connection chime sounded.", "success");
+      } else {
+        connBtn.className = "px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 text-xs font-bold font-mono border border-red-500/40 flex items-center gap-1.5 transition";
+        connDot.className = "w-2 h-2 rounded-full bg-red-400";
+        connLabel.innerText = "DISCONNECTED";
+
+        alarmBanner.className = "mt-2.5 w-full py-2 px-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-400 text-xs font-mono flex items-center justify-between animate-pulse";
+        alarmIcon.innerText = "🚨";
+        alarmText.innerText = "CONNECTION LOST! WATCHDOG ALARM ACTIVE";
+        alarmState.className = "text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-red-500/30 text-red-200";
+        alarmState.innerText = "ALARM SOUNDING";
+
+        playLostAlarm();
+        lostAlarmInterval = setInterval(playLostAlarm, 1500);
+        termLog("[ALARM] Radio signal severed! Watchdog triggered emergency brake and repeating alarm.", "danger");
+      }
+    }
+
+    connBtn.addEventListener('click', () => setConnection(!isConnected));
+
+    // Terminal Logging
+    const termStream = document.getElementById('term-stream');
+    function termLog(msg, type = 'info') {
+      const d = new Date();
+      const time = d.toTimeString().split(' ')[0] + '.' + String(d.getMilliseconds()).padStart(3, '0');
+      const div = document.createElement('div');
+      if (type === 'cmd') div.className = 'text-cyan-400 font-bold';
+      else if (type === 'danger') div.className = 'text-red-400 font-bold';
+      else if (type === 'success') div.className = 'text-emerald-400 font-bold';
+      else div.className = 'text-slate-400';
+      div.innerText = `[${time}] ${msg}`;
+      termStream.appendChild(div);
+      termStream.scrollTop = termStream.scrollHeight;
+    }
+    document.getElementById('btn-clear-term').addEventListener('click', () => {
+      termStream.innerHTML = '';
+      termLog('Terminal cleared.');
+    });
+
+    // Canvas & Building Layout Simulation
+    const canvas = document.getElementById('navCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Resize canvas
+    function resizeCanvas() {
+      canvas.width = canvas.parentElement.clientWidth;
+      canvas.height = canvas.parentElement.clientHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // Map Definitions
+    let currentMap = 'cross'; // 'cross' or 'arena'
+    let walls = [];
+
+    function setupMaps() {
+      const w = canvas.width || 640;
+      const h = canvas.height || 480;
+
+      if (currentMap === 'cross') {
+        // Cross indoor building layout with 4 corner rooms and center intersecting corridors
+        const cx = w / 2;
+        const cy = h / 2;
+        const hallW = Math.max(90, w * 0.22);
+        const hallH = Math.max(90, h * 0.25);
+
+        walls = [
+          // Outer boundary
+          { x: 10, y: 10, w: w - 20, h: 6 },
+          { x: 10, y: h - 16, w: w - 20, h: 6 },
+          { x: 10, y: 10, w: 6, h: h - 20 },
+          { x: w - 16, y: 10, w: 6, h: h - 20 },
+
+          // Room 1 (Top Left)
+          { x: 10, y: cy - hallH/2, w: cx - hallW/2 - 40, h: 6 },
+          { x: cx - hallW/2, y: 10, w: 6, h: cy - hallH/2 - 40 },
+
+          // Room 2 (Top Right)
+          { x: cx + hallW/2 + 40, y: cy - hallH/2, w: cx - hallW/2 - 40, h: 6 },
+          { x: cx + hallW/2, y: 10, w: 6, h: cy - hallH/2 - 40 },
+
+          // Room 3 (Bottom Left)
+          { x: 10, y: cy + hallH/2, w: cx - hallW/2 - 40, h: 6 },
+          { x: cx - hallW/2, y: cy + hallH/2 + 40, w: 6, h: cy - hallH/2 - 40 },
+
+          // Room 4 (Bottom Right)
+          { x: cx + hallW/2 + 40, y: cy + hallH/2, w: cx - hallW/2 - 40, h: 6 },
+          { x: cx + hallW/2, y: cy + hallH/2 + 40, w: 6, h: cy - hallH/2 - 40 }
+        ];
+      } else {
+        // Open Hall with Column Pillars
+        const w = canvas.width;
+        const h = canvas.height;
+        walls = [
+          { x: 10, y: 10, w: w - 20, h: 6 },
+          { x: 10, y: h - 16, w: w - 20, h: 6 },
+          { x: 10, y: 10, w: 6, h: h - 20 },
+          { x: w - 16, y: 10, w: 6, h: h - 20 },
+          // Columns
+          { x: w * 0.28, y: h * 0.32, w: 26, h: 26 },
+          { x: w * 0.68, y: h * 0.32, w: 26, h: 26 },
+          { x: w * 0.28, y: h * 0.68, w: 26, h: 26 },
+          { x: w * 0.68, y: h * 0.68, w: 26, h: 26 }
+        ];
+      }
+    }
+
+    document.getElementById('map-cross').addEventListener('click', () => {
+      currentMap = 'cross';
+      document.getElementById('map-cross').className = 'map-btn p-2 rounded-xl bg-orange-500 text-white font-bold border border-orange-400 transition text-left flex items-center gap-2';
+      document.getElementById('map-arena').className = 'map-btn p-2 rounded-xl bg-slate-800 text-slate-300 font-bold border border-slate-700 transition text-left flex items-center gap-2 hover:bg-slate-700';
+      setupMaps();
+      termLog('Loaded Cross-Building Corridor layout.', 'info');
+    });
+
+    document.getElementById('map-arena').addEventListener('click', () => {
+      currentMap = 'arena';
+      document.getElementById('map-arena').className = 'map-btn p-2 rounded-xl bg-orange-500 text-white font-bold border border-orange-400 transition text-left flex items-center gap-2';
+      document.getElementById('map-cross').className = 'map-btn p-2 rounded-xl bg-slate-800 text-slate-300 font-bold border border-slate-700 transition text-left flex items-center gap-2 hover:bg-slate-700';
+      setupMaps();
+      termLog('Loaded Open Hall layout with columns.', 'info');
+    });
+
+    // Car & Navigation State
+    let car = {
+      x: 320,
+      y: 240,
+      angle: 0, // Radians
+      vL: 0,
+      vR: 0,
+      width: 44,
+      length: 56,
+      maxSpeed: 3.2
+    };
+
+    let waypoints = [];
+    let speedLimit = 180;
+
+    // Raycast distance for ultrasonic simulation
+    function castRay(startX, startY, angleRad, maxDist = 200) {
+      const step = 4;
+      for (let d = 5; d < maxDist; d += step) {
+        const px = startX + Math.cos(angleRad) * d;
+        const py = startY + Math.sin(angleRad) * d;
+
+        for (const wall of walls) {
+          if (px >= wall.x && px <= wall.x + wall.w && py >= wall.y && py <= wall.y + wall.h) {
+            return d;
+          }
+        }
+      }
+      return maxDist;
+    }
+
+    // Click / Tap Waypoint Handling
+    canvas.addEventListener('pointerdown', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const clickY = e.clientY - rect.top;
+
+      if (e.shiftKey) {
+        waypoints.push({ x: clickX, y: clickY });
+      } else {
+        waypoints = [{ x: clickX, y: clickY }];
+      }
+
+      playBeep(1400, 40);
+      termLog(`[WAYPOINT] Added target: (${Math.round(clickX)}, ${Math.round(clickY)})`, 'cmd');
+    });
+
+    document.getElementById('btn-clear-path').addEventListener('click', () => {
+      waypoints = [];
+      termLog('Waypoints cleared.');
+    });
+
+    document.getElementById('btn-reset-pos').addEventListener('click', () => {
+      car.x = canvas.width / 2;
+      car.y = canvas.height / 2;
+      car.angle = 0;
+      car.vL = 0;
+      car.vR = 0;
+      waypoints = [];
+      termLog('Car reset to center crossroad.');
+    });
+
+    // Manual Controls
+    function setManual(vl, vr) {
+      if (!isConnected) return;
+      car.vL = vl;
+      car.vR = vr;
+      waypoints = []; // Manual overrides autonomous path
+      termLog(`TX: D,${vl},${vr}`, 'cmd');
+    }
+
+    document.getElementById('ctrl-fwd').addEventListener('pointerdown', () => setManual(speedLimit, speedLimit));
+    document.getElementById('ctrl-rev').addEventListener('pointerdown', () => setManual(-speedLimit, -speedLimit));
+    document.getElementById('ctrl-left').addEventListener('pointerdown', () => setManual(-speedLimit, speedLimit));
+    document.getElementById('ctrl-right').addEventListener('pointerdown', () => setManual(speedLimit, -speedLimit));
+    document.getElementById('ctrl-stop').addEventListener('pointerdown', () => setManual(0, 0));
+
+    window.addEventListener('pointerup', () => {
+      if (waypoints.length === 0 && (car.vL !== 0 || car.vR !== 0)) {
+        car.vL = 0;
+        car.vR = 0;
+      }
+    });
+
+    window.addEventListener('keydown', (e) => {
+      const k = e.key.toLowerCase();
+      if (k === 'w' || k === 'arrowup') setManual(speedLimit, speedLimit);
+      else if (k === 's' || k === 'arrowdown') setManual(-speedLimit, -speedLimit);
+      else if (k === 'a' || k === 'arrowleft') setManual(-speedLimit, speedLimit);
+      else if (k === 'd' || k === 'arrowright') setManual(speedLimit, -speedLimit);
+      else if (k === ' ' || k === 'escape') setManual(0, 0);
+    });
+
+    window.addEventListener('keyup', (e) => {
+      const k = e.key.toLowerCase();
+      if (['w','s','a','d','arrowup','arrowdown','arrowleft','arrowright'].includes(k)) {
+        if (waypoints.length === 0) setManual(0, 0);
+      }
+    });
+
+    // Speed Slider
+    const pwmSlider = document.getElementById('slider-pwm');
+    const pwmLabel = document.getElementById('label-pwm');
+    pwmSlider.addEventListener('input', (e) => {
+      speedLimit = parseInt(e.target.value);
+      pwmLabel.innerText = speedLimit;
+    });
+
+    // Telemetry Gauges Elements
+    const gaugeUsL = document.getElementById('gauge-us-l');
+    const gaugeUsR = document.getElementById('gauge-us-r');
+    const barUsL = document.getElementById('bar-us-l');
+    const barUsR = document.getElementById('bar-us-r');
+    const gaugePwms = document.getElementById('gauge-pwms');
+    const barPwm = document.getElementById('bar-pwm');
+    const poseCoords = document.getElementById('pose-coords');
+
+    let lastBuzzTime = 0;
+
+    // Main Simulation Loop
+    let lastTime = performance.now();
+    setupMaps();
+
+    function update() {
+      const now = performance.now();
+      const dt = Math.min(0.05, (now - lastTime) / 1000);
+      lastTime = now;
+
+      if (canvas.width !== canvas.parentElement.clientWidth) {
+        resizeCanvas();
+        setupMaps();
+      }
+
+      // If disconnected, stop motors immediately
+      if (!isConnected) {
+        car.vL = 0;
+        car.vR = 0;
+      }
+
+      // Autonomous Waypoint Navigation Loop
+      if (isConnected && waypoints.length > 0) {
+        const target = waypoints[0];
+        const dx = target.x - car.x;
+        const dy = target.y - car.y;
+        const distToTarget = Math.hypot(dx, dy);
+
+        if (distToTarget < 24) {
+          waypoints.shift(); // Reached waypoint!
+          playBeep(2400, 50);
+          termLog(`Reached waypoint! ${waypoints.length} remaining.`, 'success');
+          if (waypoints.length === 0) {
+            car.vL = 0;
+            car.vR = 0;
+          }
+        } else {
+          // Calculate heading error
+          const targetAngle = Math.atan2(dy, dx);
+          let angleDiff = targetAngle - car.angle;
+          while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+          while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+
+          const baseSpeed = Math.min(speedLimit, Math.max(100, distToTarget * 3.5));
+          const turnGain = 140;
+
+          if (Math.abs(angleDiff) > 0.8) {
+            // Pivot in place
+            if (angleDiff > 0) {
+              car.vL = -140;
+              car.vR = 140;
+            } else {
+              car.vL = 140;
+              car.vR = -140;
+            }
+          } else {
+            // Drive forward with steering correction
+            const steer = angleDiff * turnGain;
+            car.vL = Math.round(Math.max(-255, Math.min(255, baseSpeed - steer)));
+            car.vR = Math.round(Math.max(-255, Math.min(255, baseSpeed + steer)));
+          }
+        }
+      }
+
+      // Kinematics Update
+      const vLNorm = (car.vL / 255) * car.maxSpeed;
+      const vRNorm = (car.vR / 255) * car.maxSpeed;
+      const linearV = (vLNorm + vRNorm) / 2;
+      const angularV = (vRNorm - vLNorm) / (car.width * 0.9);
+
+      const nextAngle = car.angle + angularV * dt * 25;
+      const nextX = car.x + Math.cos(nextAngle) * linearV * dt * 45;
+      const nextY = car.y + Math.sin(nextAngle) * linearV * dt * 45;
+
+      // Wall collision check for car body
+      let collided = false;
+      for (const wall of walls) {
+        if (nextX + car.length/2 > wall.x && nextX - car.length/2 < wall.x + wall.w &&
+            nextY + car.width/2 > wall.y && nextY - car.width/2 < wall.y + wall.h) {
+          collided = true;
+          break;
+        }
+      }
+
+      if (!collided) {
+        car.x = nextX;
+        car.y = nextY;
+        car.angle = nextAngle;
+      } else {
+        car.vL = 0;
+        car.vR = 0;
+      }
+
+      // Ultrasonic Sonar Rays Calculation
+      const noseX = car.x + Math.cos(car.angle) * (car.length / 2);
+      const noseY = car.y + Math.sin(car.angle) * (car.length / 2);
+      const leftSensorAngle = car.angle - 0.28;
+      const rightSensorAngle = car.angle + 0.28;
+
+      const usLeftDist = castRay(noseX, noseY, leftSensorAngle, 180);
+      const usRightDist = castRay(noseX, noseY, rightSensorAngle, 180);
+
+      // Obstacle Alarm Buzz
+      if (isConnected && (usLeftDist < 25 || usRightDist < 25) && (car.vL > 0 || car.vR > 0)) {
+        if (now - lastBuzzTime > 300) {
+          lastBuzzTime = now;
+          playObstacleBuzz();
+        }
+      }
+
+      // Update HUD Values
+      gaugeUsL.innerText = usLeftDist.toFixed(1);
+      gaugeUsR.innerText = usRightDist.toFixed(1);
+      barUsL.style.width = `${Math.min(100, (usLeftDist / 180) * 100)}%`;
+      barUsR.style.width = `${Math.min(100, (usRightDist / 180) * 100)}%`;
+      gaugePwms.innerText = `${car.vL} / ${car.vR}`;
+      barPwm.style.width = `${Math.min(100, (Math.max(Math.abs(car.vL), Math.abs(car.vR)) / 255) * 100)}%`;
+
+      const deg = Math.round((car.angle * 180 / Math.PI) % 360);
+      poseCoords.innerText = `X: ${Math.round(car.x)} • Y: ${Math.round(car.y)} • θ: ${deg}°`;
+
+      // Draw Everything
+      draw(usLeftDist, usRightDist, noseX, noseY, leftSensorAngle, rightSensorAngle);
+
+      requestAnimationFrame(update);
+    }
+
+    function draw(usLeftDist, usRightDist, noseX, noseY, leftSensorAngle, rightSensorAngle) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Floor Grid Pattern
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1;
+      const gridSize = 40;
+      for (let x = 0; x < canvas.width; x += gridSize) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+      }
+      for (let y = 0; y < canvas.height; y += gridSize) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+      }
+
+      // Draw Building Walls
+      ctx.fillStyle = '#1e293b';
+      ctx.strokeStyle = '#f97316';
+      ctx.lineWidth = 1.5;
+      for (const wall of walls) {
+        ctx.fillRect(wall.x, wall.y, wall.w, wall.h);
+        ctx.strokeRect(wall.x, wall.y, wall.w, wall.h);
+      }
+
+      // Draw Waypoint Trail
+      if (waypoints.length > 0) {
+        ctx.beginPath();
+        ctx.moveTo(car.x, car.y);
+        for (const wp of waypoints) {
+          ctx.lineTo(wp.x, wp.y);
+        }
+        ctx.strokeStyle = 'rgba(249, 115, 22, 0.6)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 6]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Waypoint markers
+        waypoints.forEach((wp, idx) => {
+          ctx.beginPath();
+          ctx.arc(wp.x, wp.y, 8, 0, Math.PI * 2);
+          ctx.fillStyle = idx === 0 ? '#f97316' : '#64748b';
+          ctx.fill();
+          ctx.strokeStyle = '#fff';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+
+          ctx.fillStyle = '#fff';
+          ctx.font = 'bold 9px monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(idx + 1, wp.x, wp.y);
+        });
+      }
+
+      // Draw Ultrasonic Cones
+      drawSensorCone(noseX, noseY, leftSensorAngle, usLeftDist);
+      drawSensorCone(noseX, noseY, rightSensorAngle, usRightDist);
+
+      // Draw Robot Car Body & ArUco Marker
+      ctx.save();
+      ctx.translate(car.x, car.y);
+      ctx.rotate(car.angle);
+
+      // Chassis shadow
+      ctx.shadowColor = 'rgba(0,0,0,0.7)';
+      ctx.shadowBlur = 12;
+
+      // Chassis Plate
+      ctx.fillStyle = '#0f172a';
+      ctx.strokeStyle = isConnected ? '#38bdf8' : '#ef4444';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(-car.length / 2, -car.width / 2, car.length, car.width, 8);
+      ctx.fill();
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      // Left & Right Wheels
+      ctx.fillStyle = '#334155';
+      ctx.fillRect(-car.length / 2 + 6, -car.width / 2 - 5, 22, 6);
+      ctx.fillRect(-car.length / 2 + 6, car.width / 2 - 1, 22, 6);
+
+      // Front Castor Wheel
+      ctx.fillStyle = '#94a3b8';
+      ctx.beginPath();
+      ctx.arc(car.length / 2 - 6, 0, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // ArUco Marker (4x4 Matrix Pattern on Car Roof)
+      const markerSize = 26;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(-markerSize / 2, -markerSize / 2, markerSize, markerSize);
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(-markerSize / 2 + 2, -markerSize / 2 + 2, markerSize - 4, markerSize - 4);
+
+      // ArUco inner grid cells (simulated ID #0)
+      ctx.fillStyle = '#ffffff';
+      const cellSize = (markerSize - 8) / 4;
+      const pattern = [
+        [1, 0, 1, 1],
+        [0, 1, 0, 0],
+        [1, 1, 0, 1],
+        [0, 0, 1, 0]
+      ];
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 4; c++) {
+          if (pattern[r][c]) {
+            ctx.fillRect(
+              -markerSize / 2 + 4 + c * cellSize,
+              -markerSize / 2 + 4 + r * cellSize,
+              cellSize,
+              cellSize
+            );
+          }
+        }
+      }
+
+      // ArUco Vision Green Bounding Box HUD
+      ctx.strokeStyle = '#22c55e';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(-markerSize / 2 - 2, -markerSize / 2 - 2, markerSize + 4, markerSize + 4);
+
+      // Heading Vector Line (Red)
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(car.length / 2 + 14, 0);
+      ctx.strokeStyle = '#ef4444';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    function drawSensorCone(sx, sy, angle, dist) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      const spread = 0.22;
+      const arcStartX = sx + Math.cos(angle - spread) * dist;
+      const arcStartY = sy + Math.sin(angle - spread) * dist;
+      const arcEndX = sx + Math.cos(angle + spread) * dist;
+      const arcEndY = sy + Math.sin(angle + spread) * dist;
+
+      ctx.lineTo(arcStartX, arcStartY);
+      ctx.lineTo(arcEndX, arcEndY);
+      ctx.closePath();
+
+      if (dist < 28) {
+        ctx.fillStyle = 'rgba(239, 68, 68, 0.25)';
+        ctx.strokeStyle = 'rgba(239, 68, 68, 0.6)';
+      } else if (dist < 55) {
+        ctx.fillStyle = 'rgba(249, 115, 22, 0.18)';
+        ctx.strokeStyle = 'rgba(249, 115, 22, 0.5)';
+      } else {
+        ctx.fillStyle = 'rgba(6, 182, 212, 0.12)';
+        ctx.strokeStyle = 'rgba(6, 182, 212, 0.35)';
+      }
+
+      ctx.lineWidth = 1;
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Start Animation
+    requestAnimationFrame(update);
+    termLog('ArUcoNav Cross-Building Simulator online and ready.', 'success');
+  </script>
+</body>
+</html>
